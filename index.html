@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Hello Kitty Mario 🎀</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;900&family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  body {
+    background: linear-gradient(145deg, #FFD6E7, #FFB3D1);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Fredoka One', cursive;
+    touch-action: none;
+  }
+  .game-container {
+    position: relative;
+    border-radius: 28px;
+    box-shadow: 0 20px 35px rgba(255,77,148,0.3), 0 0 0 4px #FF4D94, 0 0 0 8px #FFB3D1;
+  }
+  canvas {
+    display: block;
+    border-radius: 24px;
+    cursor: pointer;
+    width: 100%;
+    height: auto;
+  }
+  .ui {
+    position: absolute;
+    top: 15px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    pointer-events: none;
+    z-index: 10;
+    font-family: 'Fredoka One', cursive;
+    text-shadow: 2px 2px 0 rgba(255,255,255,0.5);
+  }
+  .score-box, .coin-box {
+    background: rgba(255,255,255,0.88);
+    backdrop-filter: blur(4px);
+    padding: 6px 18px;
+    border-radius: 50px;
+    color: #FF4D94;
+    font-size: 1.2rem;
+    border: 2px solid #FF4D94;
+    font-weight: bold;
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,214,231,0.94);
+    backdrop-filter: blur(8px);
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 18px;
+    z-index: 20;
+    font-family: 'Fredoka One', cursive;
+    text-align: center;
+    padding: 20px;
+  }
+  .overlay h1 {
+    font-size: 2rem;
+    color: #FF4D94;
+    text-shadow: 3px 3px 0 white;
+  }
+  .btn {
+    background: linear-gradient(145deg, #FF4D94, #e0296e);
+    border: none;
+    color: white;
+    font-family: 'Fredoka One', cursive;
+    padding: 12px 28px;
+    font-size: 1.2rem;
+    border-radius: 60px;
+    cursor: pointer;
+    box-shadow: 0 5px 0 #b01f52;
+    transition: 0.05s linear;
+  }
+  .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #b01f52; }
+  .small {
+    font-size: 0.8rem;
+    color: #c2547a;
+    font-family: 'Nunito', sans-serif;
+  }
+  .love-msg {
+    font-family: 'Dancing Script', cursive;
+    font-size: 1.2rem;
+    color: #d63a7a;
+    background: rgba(255,255,255,0.8);
+    border-radius: 20px;
+    padding: 10px 18px;
+    border: 2px solid #FFB3D1;
+    margin: 5px 0;
+  }
+  @media (max-width: 550px) {
+    .score-box, .coin-box { font-size: 0.9rem; padding: 4px 12px; }
+    .overlay h1 { font-size: 1.6rem; }
+    .btn { font-size: 1rem; padding: 8px 20px; }
+    .love-msg { font-size: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="game-container">
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <div class="ui">
+    <div class="score-box">🎀 <span id="scoreValue">0</span></div>
+    <div class="coin-box">💗 <span id="coinValue">0</span></div>
+  </div>
+  <div id="startOverlay" class="overlay">
+    <div style="font-size: 3rem;">🐱🎀</div>
+    <h1>HELLO KITTY RUNNER</h1>
+    <p class="small">Tap / Click / Space to jump<br>Run, avoid pink monsters, collect hearts</p>
+    <button class="btn" id="startBtn">START GAME</button>
+    <p class="small" style="margin-top: 8px;">🌸 Mario-style runner 🌸</p>
+  </div>
+  <div id="gameOverOverlay" class="overlay" style="display: none;">
+    <div style="font-size: 3rem;">💕🐱</div>
+    <h1>GAME OVER</h1>
+    <div class="love-msg">✨ You would always win for me, no matter what 🎀💗</div>
+    <div style="display: flex; gap: 20px; margin: 10px 0;">
+      <div><span id="finalScore">0</span><br><span class="small">SCORE</span></div>
+      <div><span id="finalBest">0</span><br><span class="small">BEST</span></div>
+      <div><span id="finalCoins">0</span><br><span class="small">HEARTS</span></div>
+    </div>
+    <button class="btn" id="restartBtn">TRY AGAIN 🎀</button>
+  </div>
+</div>
+
+<script>
+  (function(){
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = 800, H = 400;
+    canvas.width = W; canvas.height = H;
+    
+    // Game state
+    let state = 'idle'; // idle, playing, gameover
+    let score = 0;
+    let bestScore = localStorage.getItem('kittyRunnerBest') ? parseInt(localStorage.getItem('kittyRunnerBest')) : 0;
+    let hearts = 0;
+    let frame = 0;
+    let scrollX = 0;
+    let gameSpeed = 5;
+    
+    // Player
+    let player = {
+      x: 100,
+      y: 0,
+      width: 32,
+      height: 32,
+      vy: 0,
+      onGround: true,
+      groundedY: H - 65, // ground level
+      jumpPower: -8,
+      gravity: 0.5,
+      image: null
+    };
+    player.y = player.groundedY - player.height;
+    
+    // Obstacles (enemies) - pink Goomba style
+    let obstacles = [];
+    // Collectibles (hearts)
+    let collectibles = [];
+    // Particles
+    let particles = [];
+    
+    // Background clouds
+    let clouds = [];
+    
+    // Load Hello Kitty image (fixed server image)
+    const kittyImg = new Image();
+    kittyImg.src = "image.png";
+    let kittyLoaded = false;
+    kittyImg.onload = () => { kittyLoaded = true; };
+    kittyImg.onerror = () => { console.log("Using drawn Kitty"); kittyLoaded = false; };
+    
+    // ------------------- HELPER DRAWINGS -------------------
+    function drawRoundedRect(x,y,w,h,r){
+      ctx.beginPath();
+      ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+      ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+      ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+      ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // Background (pink sky, ground)
+    function drawBackground(){
+      const grad = ctx.createLinearGradient(0,0,0,H);
+      grad.addColorStop(0,"#FFD6E7");
+      grad.addColorStop(0.7,"#FFE0EE");
+      grad.addColorStop(1,"#FFC0D5");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0,0,W,H);
+      
+      // clouds
+      for(let c of clouds){
+        ctx.fillStyle = `rgba(255,255,245,${c.op})`;
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y, 35, 25, 0, 0, Math.PI*2);
+        ctx.ellipse(c.x+30, c.y-10, 30, 22, 0, 0, Math.PI*2);
+        ctx.ellipse(c.x-30, c.y-8, 28, 20, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = "#FFB3D1";
+        ctx.font = `22px serif`;
+        ctx.fillText("🎀", c.x-5, c.y-12);
+      }
+      
+      // ground (pink brick style)
+      const groundY = H-50;
+      ctx.fillStyle = "#FFB3D1";
+      ctx.fillRect(0, groundY, W, 50);
+      ctx.fillStyle = "#FF85B3";
+      for(let i=0; i<W+30; i+=40){
+        ctx.fillRect(i, groundY, 22, 18);
+        ctx.fillRect(i+12, groundY+20, 22, 18);
+      }
+      ctx.fillStyle = "#FF4D94";
+      ctx.fillRect(0, groundY-5, W, 6);
+      // heart decorations
+      ctx.fillStyle = "#FFFFFFAA";
+      ctx.font = `20px serif`;
+      for(let i=0;i<W;i+=55) ctx.fillText("💗", i+10, groundY+32);
+    }
+    
+    // Draw pink enemy (like Goomba but cute)
+    function drawEnemy(e){
+      ctx.fillStyle = "#FF85B3";
+      ctx.shadowBlur = 3;
+      ctx.beginPath();
+      ctx.ellipse(e.x+16, e.y+12, 14, 12, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = "#FF4D94";
+      ctx.beginPath();
+      ctx.ellipse(e.x+16, e.y+8, 10, 8, 0, 0, Math.PI*2);
+      ctx.fill();
+      // eyes
+      ctx.fillStyle = "#FFF";
+      ctx.beginPath(); ctx.arc(e.x+10, e.y+6, 3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x+22, e.y+6, 3, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#1a1a1a";
+      ctx.beginPath(); ctx.arc(e.x+9, e.y+5, 1.5, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x+21, e.y+5, 1.5, 0, Math.PI*2); ctx.fill();
+      // angry brows?
+      ctx.fillStyle = "#c2547a";
+      ctx.fillRect(e.x+6, e.y+2, 8, 2);
+      ctx.fillRect(e.x+18, e.y+2, 8, 2);
+      ctx.shadowBlur = 0;
+    }
+    
+    // Draw heart collectible
+    function drawHeart(h){
+      const bounce = Math.sin(Date.now() * 0.008 + h.id) * 2;
+      ctx.save();
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = "#FF85B3";
+      ctx.font = `26px serif`;
+      ctx.fillStyle = "#FF4D94";
+      ctx.fillText("💗", h.x, h.y + bounce);
+      ctx.fillStyle = "#FFB3D1";
+      ctx.font = `18px serif`;
+      ctx.fillText("✨", h.x+5, h.y-5 + bounce);
+      ctx.restore();
+    }
+    
+    // Draw Hello Kitty (fixed image or fallback, NO extra bow on head)
+    function drawPlayer(){
+      const px = player.x;
+      const py = player.y;
+      ctx.save();
+      if(kittyLoaded && kittyImg.complete && kittyImg.naturalWidth>0){
+        ctx.beginPath();
+        ctx.arc(px+16, py+16, 16, 0, Math.PI*2);
+        ctx.clip();
+        ctx.drawImage(kittyImg, px, py, 32, 32);
+      } else {
+        // Fallback Hello Kitty face (no bow)
+        ctx.fillStyle = "#FFF";
+        ctx.beginPath();
+        ctx.arc(px+16, py+16, 15, 0, Math.PI*2);
+        ctx.fill();
+        // ears
+        ctx.fillStyle = "#FFB3D1";
+        ctx.beginPath(); ctx.moveTo(px+4, py+2); ctx.lineTo(px-6, py-10); ctx.lineTo(px+12, py-4); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(px+28, py+2); ctx.lineTo(px+38, py-10); ctx.lineTo(px+20, py-4); ctx.fill();
+        // eyes
+        ctx.fillStyle = "#1a1a1a";
+        ctx.beginPath(); ctx.arc(px+11, py+13, 3, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(px+21, py+13, 3, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#FFF";
+        ctx.beginPath(); ctx.arc(px+10, py+11, 1, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(px+20, py+11, 1, 0, Math.PI*2); ctx.fill();
+        // nose
+        ctx.fillStyle = "#FF85B3";
+        ctx.beginPath(); ctx.ellipse(px+16, py+18, 2.5, 2, 0, 0, Math.PI*2); ctx.fill();
+        // whiskers
+        ctx.strokeStyle = "#bbb";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px+6, py+18); ctx.lineTo(px-4, py+16);
+        ctx.moveTo(px+6, py+20); ctx.lineTo(px-4, py+22);
+        ctx.moveTo(px+26, py+18); ctx.lineTo(px+36, py+16);
+        ctx.moveTo(px+26, py+20); ctx.lineTo(px+36, py+22);
+        ctx.stroke();
+        // NO BOW on head – removed
+      }
+      ctx.restore();
+      // shadow
+      ctx.fillStyle = "rgba(0,0,0,0.15)";
+      ctx.beginPath();
+      ctx.ellipse(px+18, player.groundedY+3, 18, 6, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+    
+    // Particles on collect
+    function addSparkles(x,y){
+      for(let i=0;i<10;i++){
+        particles.push({
+          x: x, y: y,
+          vx: (Math.random()-0.5)*3,
+          vy: (Math.random()-0.5)*2 - 1,
+          life: 20,
+          color: `hsl(${320+Math.random()*40}, 80%, 65%)`
+        });
+      }
+    }
+    function updateParticles(){
+      for(let i=0;i<particles.length;i++){
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.1;
+        p.life--;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.5, 0, Math.PI*2);
+        ctx.fill();
+        if(p.life<=0) particles.splice(i,1);
+      }
+    }
+    
+    // Spawn enemy (every 90 frames)
+    function spawnEnemy(){
+      obstacles.push({
+        x: W,
+        y: player.groundedY - 28, // ground level
+        width: 32,
+        height: 32
+      });
+    }
+    
+    // Spawn heart collectible
+    function spawnHeart(){
+      collectibles.push({
+        x: W,
+        y: player.groundedY - 40 - Math.random()*20,
+        width: 20,
+        height: 20,
+        id: Math.random()
+      });
+    }
+    
+    // Update game logic
+    function updateGame(){
+      if(state !== 'playing') return;
+      
+      frame++;
+      scrollX += gameSpeed;
+      
+      // player physics
+      player.vy += player.gravity;
+      player.y += player.vy;
+      if(player.y >= player.groundedY - player.height){
+        player.y = player.groundedY - player.height;
+        player.vy = 0;
+        player.onGround = true;
+      } else {
+        player.onGround = false;
+      }
+      
+      // spawn obstacles and hearts
+      if(frame % 85 === 0) spawnEnemy();
+      if(frame % 55 === 0) spawnHeart();
+      
+      // move obstacles
+      for(let i=0;i<obstacles.length;i++){
+        obstacles[i].x -= gameSpeed;
+        if(obstacles[i].x + obstacles[i].width < 0){
+          obstacles.splice(i,1);
+          i--;
+        }
+      }
+      // move hearts
+      for(let i=0;i<collectibles.length;i++){
+        collectibles[i].x -= gameSpeed;
+        if(collectibles[i].x + 20 < 0){
+          collectibles.splice(i,1);
+          i--;
+        }
+      }
+      
+      // collision with enemies (game over if touch)
+      for(let o of obstacles){
+        if(player.x < o.x+o.width && player.x+player.width > o.x &&
+           player.y < o.y+o.height && player.y+player.height > o.y){
+          state = 'gameover';
+          if(score > bestScore){
+            bestScore = score;
+            localStorage.setItem('kittyRunnerBest', bestScore);
+          }
+          document.getElementById('finalScore').innerText = Math.floor(score/30);
+          document.getElementById('finalBest').innerText = bestScore;
+          document.getElementById('finalCoins').innerText = hearts;
+          document.getElementById('gameOverOverlay').style.display = 'flex';
+          return;
+        }
+      }
+      
+      // collect hearts
+      for(let i=0;i<collectibles.length;i++){
+        let c = collectibles[i];
+        if(player.x < c.x+15 && player.x+player.width > c.x &&
+           player.y < c.y+15 && player.y+player.height > c.y){
+          hearts++;
+          document.getElementById('coinValue').innerText = hearts;
+          addSparkles(c.x+10, c.y+10);
+          collectibles.splice(i,1);
+          i--;
+        }
+      }
+      
+      // increase score over time
+      score++;
+      document.getElementById('scoreValue').innerText = Math.floor(score/30);
+      // difficulty ramp
+      gameSpeed = Math.min(8, 5 + Math.floor(score/800));
+    }
+    
+    // Render all (NO extra score text drawn on canvas – only the ribbon tab)
+    function render(){
+      drawBackground();
+      for(let o of obstacles) drawEnemy(o);
+      for(let h of collectibles) drawHeart(h);
+      drawPlayer();
+      updateParticles();
+      
+      // Only the UI elements (ribbon boxes) show the score – nothing extra drawn here
+    }
+    
+    // Jump
+    function jump(){
+      if(state === 'playing' && player.onGround){
+        player.vy = player.jumpPower;
+        player.onGround = false;
+      } else if(state === 'idle'){
+        startGame();
+      }
+    }
+    
+    function startGame(){
+      state = 'playing';
+      score = 0;
+      hearts = 0;
+      gameSpeed = 5;
+      obstacles = [];
+      collectibles = [];
+      particles = [];
+      frame = 0;
+      player.y = player.groundedY - player.height;
+      player.vy = 0;
+      document.getElementById('scoreValue').innerText = "0";
+      document.getElementById('coinValue').innerText = "0";
+      document.getElementById('startOverlay').style.display = 'none';
+      document.getElementById('gameOverOverlay').style.display = 'none';
+    }
+    
+    // Clouds init
+    function initClouds(){
+      for(let i=0;i<5;i++){
+        clouds.push({
+          x: Math.random()*W,
+          y: 30+Math.random()*100,
+          op: 0.6+Math.random()*0.3,
+          speed: 0.3+Math.random()*0.5
+        });
+      }
+    }
+    function updateClouds(){
+      for(let c of clouds){
+        c.x -= c.speed;
+        if(c.x+80<0) c.x = W+60;
+      }
+    }
+    
+    // Events
+    canvas.addEventListener('click', (e) => { e.preventDefault(); jump(); });
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); }, {passive:false});
+    document.addEventListener('keydown', (e) => {
+      if(e.code === 'Space' || e.code === 'ArrowUp'){
+        e.preventDefault();
+        jump();
+      }
+    });
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('restartBtn').addEventListener('click', () => {
+      startGame();
+    });
+    
+    // Animation loop
+    function animate(){
+      if(state === 'playing') updateGame();
+      updateClouds();
+      render();
+      requestAnimationFrame(animate);
+    }
+    
+    initClouds();
+    state = 'idle';
+    animate();
+  })();
+</script>
+</body>
+</html>
